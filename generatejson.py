@@ -9,7 +9,6 @@
 # item-type='A type' \
 # item-url='A url' \
 # script-do-not-wait='A boolean' \
-# pkg-skip-if='A string' \
 # --base-url URL \
 # --output PATH
 
@@ -100,22 +99,35 @@ def getpkginfo(filename):
             return pkgId, pkgVersion
 
 
-def build_item_dict(itemsToProcess, base_url):
-    '''Takes a dict of item and the base_url where root dir is hosted
-    itemsToProcess = [
-        {
-            'item-name': '',
-            'item-path': '',
-            'item-stage': '',
-            'item-type': '',
-            'item-url': '',
-            'script-do-not-wait': '',
-            'pkg-skip-if': ''
-        },
-        ...
-    ]
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--base-url', default=None, action='store',
+                        help='Base URL to where root dir is hosted')
+    parser.add_argument('--output', default=None, action='store',
+                        help='Required: Output directory to save json')
+    parser.add_argument('--item', default=None, action='append', nargs=6,
+                        metavar=(
+                            'item-name', 'item-path', 'item-stage',
+                            'item-type', 'item-url', 'script-do-not-wait'),
+                        help='Required: Options for item. All items are \
+                        required. Scripts default to rootscript and stage \
+                        Scripts default to rootscript and stage defaults to userland')
+    args = parser.parse_args()
 
-    returns a dict that can be dumped to bootstrap.json'''
+    # Bail if we don't have one item, the base url and the output dir
+    if not args.item or not args.base_url or not args.output:
+        parser.print_help()
+        exit(1)
+
+    # Let's first loop through the items and convert everything to key value
+    # pairs
+    itemsToProcess = []
+    for item in args.item:
+        processedItem = {}
+        for itemOption in item:
+            values = itemOption.split('=', 1)
+            processedItem[values[0]] = values[1]
+        itemsToProcess.append(processedItem)
 
     # Create our stages now so InstallApplications won't blow up
     stages = {
@@ -127,7 +139,6 @@ def build_item_dict(itemsToProcess, base_url):
     # Process each item in the order they were passed in
     for item in itemsToProcess:
         itemJson = {}
-
         # Get the file extension of the file
         fileExt = os.path.splitext(item['item-path'])[1]
         # Get the file name of the file
@@ -169,7 +180,7 @@ def build_item_dict(itemsToProcess, base_url):
         try:
             itemJson['url'] = item['item-url']
         except KeyError:
-            itemJson['url'] = '%s/%s/%s' % (base_url, itemStage, fileName)
+            itemJson['url'] = '%s/%s/%s' % (args.base_url, itemStage, fileName)
 
         # Determine the name of the item to process - defaults to the filename
         if not item['item-name']:
@@ -192,15 +203,13 @@ def build_item_dict(itemsToProcess, base_url):
             # Check crappy way of doing booleans
             try:
                 if item['script-do-not-wait'] in ('true', 'True', '1',
-                                                  'false', 'False', '0'):
+                                              'false', 'False', '0'):
                     # If True, pass the key to the item
                     if item['script-do-not-wait'] in ('true', 'True', '1'):
                         itemJson['donotwait'] = True
                 else:
-                    print(
-                        'script-do-not-wait malformed: %s ' %
-                        str(item['script-do-not-wait'])
-                    )
+                    print('script-do-not-wait malformed: %s ' % str(
+                    item['script-do-not-wait']))
                     exit(1)
             except:
                 itemJson['donotwait'] = False
@@ -212,58 +221,15 @@ def build_item_dict(itemsToProcess, base_url):
                 'installapplications/%s' % fileName
             itemJson['packageid'] = pkgId
             itemJson['version'] = pkgVersion
-            try:
-                # handle skipping based on architecture
-                if item['pkg-skip-if'] not in ('false', 'False', '0'):
-                    # Add the key to the item
-                    if item['pkg-skip-if'] in ('intel', 'x86_64',
-                                               'apple_silicon', 'arm64'):
-                        itemJson['skip_if'] = item['pkg-skip-if']
-            except:
-                pass
 
         # Append the info to the appropriate stage
         stages[itemStage].append(itemJson)
 
-    return stages
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--base-url', default=None, action='store',
-                        help='Base URL to where root dir is hosted')
-    parser.add_argument('--output', default=None, action='store',
-                        help='Required: Output directory to save json')
-    parser.add_argument('--item', default=None, action='append', nargs=6,
-                        metavar=(
-                            'item-name', 'item-path', 'item-stage',
-                            'item-type', 'item-url', 'script-do-not-wait',
-                            'pkg-skip-if'),
-                        help='Required: Options for item. All items are \
-                        required. Scripts default to rootscript and stage \
-                        Scripts default to rootscript and stage defaults to userland')
-    args = parser.parse_args()
-
-    # Bail if we don't have one item, the base url and the output dir
-    if not args.item or not args.base_url or not args.output:
-        parser.print_help()
-        exit(1)
-
-    # Let's first loop through the items and convert everything to key value
-    # pairs
-    itemsToProcess = []
-    for item in args.item:
-        processedItem = {}
-        for itemOption in item:
-            values = itemOption.split('=', 1)
-            processedItem[values[0]] = values[1]
-        itemsToProcess.append(processedItem)
-
-    # Create our stages now so InstallApplications won't blow up
-    stages = build_item_dict(itemsToProcess=itemsToProcess, base_url=args.base_url)
-
     # Saving the json file to the output directory path
-    savePath = os.path.join(args.output, 'bootstrap.json')
+    if args.output:
+        savePath = os.path.join(args.output, 'bootstrap.json')
+    else:
+        savePath = os.path.join(rootdir, 'bootstrap.json')
 
     # Sort the primary keys, but not the sub keys, so things are in the correct
     # order

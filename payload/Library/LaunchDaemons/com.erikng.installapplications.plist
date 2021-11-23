@@ -9,7 +9,7 @@
 		<string>/Library/installapplications/Python.framework/Versions/Current/bin/python3</string>
 		<string>/Library/installapplications/installapplications.py</string>
 		<string>--jsonurl</string>
-		<string>https://domain.tld</string>
+		<string>https://awsmdm.ecuad.ca/repo/bootstrap.json</string>
 		<!-- <string>--dry-run</string> -->
 		<!-- <string>--follow-redirects</string> -->
 		<!-- <string>--headers</string> -->
